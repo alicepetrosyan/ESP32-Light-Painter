@@ -1,0 +1,132 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>ESP Web Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  
+  <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+
+  <style>
+    html {
+      font-family: Arial, Helvetica, sans-serif;
+      text-align: center;
+      background-color: #1a1a1a;
+      color: #ffffff;
+    }
+    .content {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .card {
+      background-color: #2a2a2a;
+      box-shadow: 2px 2px 12px 1px rgba(0, 0, 0, 0.5);
+      padding: 20px;
+      border-radius: 15px;
+    }
+    /* Container layout for the SVG color picker */
+    #pickerContainer {
+      display: flex;
+      justify-content: center;
+      margin: 20px auto;
+    }
+    .button {
+      background-color: #00adb5;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 2px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <div class="card">
+      <h2>Output: GPIO 13</h2>
+      <p class="led-colour"> LED Colour: <span id="colour" style="font-weight: bold;">%COLOUR%</span></p>
+      
+      <div id="pickerContainer"></div>
+      
+      <p><button id="button" class="button">Toggle</button></p>
+    </div>
+  </div>
+
+<script>
+  var gateway = `ws://${window.location.hostname}/ws`;
+  var websocket;
+  var colorPicker; // Global instance variable
+
+  window.addEventListener('load', onLoad);
+
+  function initWebSocket() {
+    console.log('Trying to open a WebSocket connection...');
+    websocket = new WebSocket(gateway);
+    websocket.onopen    = onOpen;
+    websocket.onclose   = onClose;
+    websocket.onmessage = onMessage;
+  }
+
+  function onOpen(event) {
+    console.log('Connection opened');
+  }
+
+  function onClose(event) {
+    console.log('Connection closed');
+    setTimeout(initWebSocket, 2000);
+  }
+
+  function onMessage(event) {
+    var colour = event.data;
+    document.getElementById('colour').innerHTML = colour;
+    document.getElementById('colour').style.color = colour;
+    
+    // Sync the picker wheel UI if the ESP32 broadcasts a color change from elsewhere
+    if (colorPicker && colour.startsWith('#')) {
+      colorPicker.color.hexString = colour;
+    }
+  }
+
+  function onLoad(event) {
+    initWebSocket();
+    initColourPicker();
+  }
+
+  function initColourPicker() {
+    // Mount the iro.js picker component to our container div
+    colorPicker = new iro.ColorPicker("#pickerContainer", {
+      width: 220,
+      color: "#80134f", // Default pink starting value
+      layout: [
+        { 
+          component: iro.ui.Wheel, // Perfect layout scheme for future WebXR mapping
+        },
+        { 
+          component: iro.ui.Slider,
+          options: { sliderType: 'value' } // Brightness Control
+        }
+      ]
+    });
+
+    // Listen for user adjustments (triggers while dragging or on click release)
+    colorPicker.on('input:end', function(color) {
+      sendColour(color.hexString);
+    });
+  }
+
+  // Updated to accept the string payload directly from the picker component
+  function sendColour(hexString){
+    if (websocket.readyState === WebSocket.OPEN) {
+      console.log("Sending color to ESP32:", hexString);
+      websocket.send(hexString);
+    }
+  }
+</script>
+</body>
+</html>
